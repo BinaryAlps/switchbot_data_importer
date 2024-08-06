@@ -1,42 +1,78 @@
 import pandas as pd
+import os
 import mysql.connector
 from mysql.connector import errorcode
 
-# Lesen der CSV-Datei
-print("Opening file...")
-df = pd.read_csv('data.csv')
-print(" -- Done")
+try:
+    from config import config
+except ImportError:
+    print("[ERROR]: The file 'config.py' was not found.")
+    print("[HINT]: Make sure to rename 'config_sample.py' to 'config.py'.")
+    exit(1)
 
-# Verbindung zur MySQL-Datenbank herstellen
-print("Trying to connect...")
-config = {
-    'user': '',
-    'password': '',
-    'host': '',
-    'database': ''
-}
+def get_csv_file():
+    # Alle CSV-Dateien im aktuellen Verzeichnis suchen
+    csv_files = [f for f in os.listdir('.') if f.endswith('.csv')]
+    
+    if not csv_files:
+        print("[ERROR]: No CSV-Files found in the current directory. Abort run.")
+        exit(1)
+    
+    if len(csv_files) == 1:
+        print("Found one CSV-File: {0}".format(csv_files[0]))
+        print("Using this file now.")
+        return csv_files[0]
+    
+    print("Multiple CSV-Files found:")
+    for i, file in enumerate(csv_files, 1):
+        print(f"{i}. {file}")
+    
+    while True:
+        try:
+            choice = int(input("Please choose the number of the correct CSV-File: "))
+            if 1 <= choice <= len(csv_files):
+                return csv_files[choice - 1]
+            else:
+                print("Invalid choice. Please try again.")
+        except ValueError:
+            print("Invalid input. Please insert a number.")
 
-# Erste und letzte Datum in der CSV-Datei
+# CSV-Datei auswählen
+csv_file = get_csv_file()
+
+# CSV-Datei laden
+try:
+    df = pd.read_csv(csv_file)
+    if df.empty:
+        print("[ERROR]: The chosen CSV-File '{0}' is empty.".format(csv_file))
+        exit(1)
+except pd.errors.EmptyDataError:
+    print("[ERROR]: The chosen CSV-File '{0}' contains no data.".format(csv_file))
+    exit(1)
+
+
+# TODO: Dynmic mapping?
 first_date = df['Timestamp'].min()
 last_date = df['Timestamp'].max()
 total_rows = len(df)
 
-print(f"Gesamtanzahl der Zeilen in der CSV-Datei: {total_rows}")
-print(f"Erstes Datum in der CSV-Datei: {first_date}")
-print(f"Letztes Datum in der CSV-Datei: {last_date}")
+print("Some stats:")
+print("Total number of rows in the CSV-File: {0}".format(total_rows))
+print("First date in the CSV-File: {0}".format(first_date))
+print("Last date in the CSV-File: {0}".format(last_date))
 
 try:
     # Verbindung zur MySQL-Datenbank herstellen
     conn = mysql.connector.connect(**config)
     cursor = conn.cursor()
 
-    # SQL-Insert-Befehl
+    # TODO: Dynmic mapping + tablename from config
     insert_stmt = (
         "INSERT INTO switchbot_outdoor (Timestamp, Temperature_Celsius, Relative_Humidity, Absolute_Humidity, DPT_Celsius, VPD) "
         "VALUES (%s, %s, %s, %s, %s, %s)"
     )
 
-    # Überprüfung, ob der `Timestamp` bereits existiert
+    # TODO: Check if column + row exists
     check_stmt = (
         "SELECT COUNT(*) FROM switchbot_outdoor WHERE Timestamp = %s"
     )
@@ -58,7 +94,7 @@ try:
             cursor.execute(insert_stmt, data)
             imported_rows += 1
         
-        # Fortschritt anzeigen
+        # TODO: Check progress 
         if (index + 1) % 100 == 0 or (index + 1) == total_rows:
             print(f"Fortschritt: {index + 1}/{total_rows} Zeilen verarbeitet, {imported_rows} neue Zeilen importiert.")
 
@@ -70,10 +106,13 @@ try:
 
 except mysql.connector.Error as err:
     if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-        print("Fehler: Zugangsdaten sind inkorrekt.")
+        print("[ERROR]: Zugangsdaten sind inkorrekt.")
     elif err.errno == errorcode.ER_BAD_DB_ERROR:
-        print("Fehler: Die Datenbank existiert nicht.")
+        print("[ERROR]: Database '{0}' does not exist.".format(config.get("database")))
+    elif err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
+        # TODO: dynamic tablename?
+        print("[ERROR]: The specified table '{}' does not exist.".format("sone tablename"))
     else:
-        print(f"Fehler: {err}")
+        print("[ERROR]: {0}".format(err))
 
 print("DONE")
