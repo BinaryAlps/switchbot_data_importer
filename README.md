@@ -47,7 +47,8 @@ _Hint:_ If the tables does not already exist the script will automatically creat
 
 If you want to disable the statics output from the script set ```show_stats``` to ```False```.
 
-
+## Data Export, preparation & execution
+Please visit the documentation on the Binary Alps: Knowledge platform [via this link](https://kb.binary-alps.at/en/github/switchbot_data_importer).
     
 ## License
 
